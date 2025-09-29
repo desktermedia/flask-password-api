@@ -1,3 +1,4 @@
 flask
 gunicorn
 py7zr
+flask-cors
