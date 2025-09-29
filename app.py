@@ -23,13 +23,14 @@ def download(filename):
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             out_path = os.path.join(tmpdir, f"{keyword}.7z")
-            # Keine Kompression → super schnell & RAM-sparend
-            filters = [{'id': py7zr.FILTER_COPY}]
-            with py7zr.SevenZipFile(out_path, 'w', password=password, filters=filters) as z:
+
+            # Passwort-geschütztes Archiv erzeugen
+            with py7zr.SevenZipFile(out_path, 'w', password=password) as z:
                 z.write(EXE_FILE, arcname=f"{keyword}.exe")
 
-            # Passwort speichern für /get-password
-            with open(os.path.join(PASSWORD_STORE, f"{keyword}.txt"), "w") as f:
+            # Passwort in /tmp sichern
+            pw_file = os.path.join(PASSWORD_STORE, f"{keyword}.txt")
+            with open(pw_file, "w") as f:
                 f.write(password)
 
             return send_file(out_path, as_attachment=True, download_name=f"{keyword}.7z")
