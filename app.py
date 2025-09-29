@@ -1,10 +1,11 @@
-from flask import Flask, jsonify, send_file
+from flask import Flask, jsonify, send_file, CORS
 import os
 import random
 import string
 import py7zr
 
 app = Flask(__name__)
+CORS(app)
 
 # Verzeichnis für temporäre Archive
 TMP_DIR = "/tmp/packages"
