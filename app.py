@@ -1,51 +1,61 @@
-from flask import Flask, request, send_file, jsonify
-from flask_cors import CORS
-import py7zr, tempfile, os, random, string
+from flask import Flask, request, jsonify, send_file
+import os
+import random
+import string
+import py7zr
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "https://save-drop.netlify.app"}})
 
-EXE_FILE = "base.exe"      # deine echte EXE, liegt im Repo
-PASSWORD_STORE = "/tmp/passwords"
-os.makedirs(PASSWORD_STORE, exist_ok=True)
+# Speicherpfade
+TMP_DIR = "/tmp/packages"
+os.makedirs(TMP_DIR, exist_ok=True)
+
+# Dummy EXE (deine echte Datei kannst du hier referenzieren)
+EXE_FILE = "myexe.exe"
 
 def generate_password():
     return ''.join(random.choices(string.digits, k=4))
 
-@app.route("/download/<path:filename>")
+@app.route("/download/<path:filename>", methods=["GET"])
 def download(filename):
-    keyword = filename.rsplit(".", 1)[0].replace("+", " ")
+    """
+    Erstellt ein 7z-Archiv mit Passwortschutz und gibt JSON zurück:
+    {
+      "password": "1234",
+      "download_url": "/getfile/test123.7z"
+    }
+    """
+    keyword = filename.replace(".zip", "")
+    archive_name = f"{keyword}.7z"
+    archive_path = os.path.join(TMP_DIR, archive_name)
+
+    # Passwort erzeugen
     password = generate_password()
 
-    if not os.path.exists(EXE_FILE):
-        return jsonify({"error": "base.exe not found on server"}), 500
+    # Falls altes Archiv existiert, löschen
+    if os.path.exists(archive_path):
+        os.remove(archive_path)
 
-    try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            out_path = os.path.join(tmpdir, f"{keyword}.7z")
+    # Archiv erstellen
+    with py7zr.SevenZipFile(archive_path, 'w', password=password) as archive:
+        # arcname bestimmt, wie die Datei IM Archiv heißt
+        archive.write(EXE_FILE, arcname=f"{keyword}.exe")
 
-            # Passwort-geschütztes Archiv erzeugen
-            with py7zr.SevenZipFile(out_path, 'w', password=password) as z:
-                z.write(EXE_FILE, arcname=f"{keyword}.exe")
+    return jsonify({
+        "password": password,
+        "download_url": f"/getfile/{archive_name}"
+    })
 
-            # Passwort in /tmp sichern
-            pw_file = os.path.join(PASSWORD_STORE, f"{keyword}.txt")
-            with open(pw_file, "w") as f:
-                f.write(password)
+@app.route("/getfile/<path:filename>", methods=["GET"])
+def getfile(filename):
+    """
+    Gibt die reale 7z-Datei zum Download zurück.
+    """
+    archive_path = os.path.join(TMP_DIR, filename)
+    if not os.path.exists(archive_path):
+        return jsonify({"error": "File not found"}), 404
+    return send_file(archive_path, as_attachment=True)
 
-            return send_file(out_path, as_attachment=True, download_name=f"{keyword}.7z")
-    except Exception as e:
-        return jsonify({"error": f"build failed: {e}"}), 500
-
-@app.route("/get-password")
-def get_password():
-    file = (request.args.get("file", "") or "").rsplit(".", 1)[0].replace("+", " ")
-    pw_path = os.path.join(PASSWORD_STORE, f"{file}.txt")
-    if os.path.exists(pw_path):
-        with open(pw_path, "r") as f:
-            return jsonify({"password": f.read().strip()})
-    return jsonify({"password": "error"})
-
-@app.route("/")
-def ok():
-    return "API is running."
+@app.route("/", methods=["GET"])
+def home():
+    return "Flask Password API is running!"
