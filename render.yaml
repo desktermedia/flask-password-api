@@ -2,6 +2,5 @@ services:
   - type: web
     name: password-api
     env: python
-    buildCommand: ""
-    startCommand: gunicorn app:app
+    startCommand: gunicorn app:app -k sync -w 1 -t 180
     plan: free
