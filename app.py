@@ -1,63 +1,47 @@
-from flask import Flask, jsonify, send_file, CORS
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
 import os
 import random
-import string
-import py7zr
+import subprocess
 
 app = Flask(__name__)
-CORS(app)
+CORS(app)  # 🚀 erlaubt CORS von überall
 
-# Verzeichnis für temporäre Archive
-TMP_DIR = "/tmp/packages"
-os.makedirs(TMP_DIR, exist_ok=True)
-
-# Deine echte EXE-Datei (musst du im Render-Repo mit hochladen!)
-EXE_FILE = "base.exe"
-
-def generate_password():
-    """Erzeugt ein 4-stelliges Zufallspasswort"""
-    return ''.join(random.choices(string.digits, k=4))
-
-@app.route("/download/<path:filename>", methods=["GET"])
+@app.route("/download/<path:filename>")
 def download(filename):
-    """
-    Erstellt ein 7z-Archiv mit Passwortschutz und gibt JSON zurück:
-    {
-      "password": "1234",
-      "download_url": "/getfile/tester+supi+77.7z"
-    }
-    """
-    keyword = filename.replace(".zip", "")
-    archive_name = f"{keyword}.7z"
-    archive_path = os.path.join(TMP_DIR, archive_name)
+    # Zufälliges Passwort
+    password = str(random.randint(1000, 9999))
 
-    # Neues Passwort
-    password = generate_password()
+    # Dateinamen anpassen (7z statt zip)
+    base_name = filename.replace(".zip", "")
+    archive_name = f"{base_name}.7z"
 
-    # Vorhandenes Archiv löschen
-    if os.path.exists(archive_path):
-        os.remove(archive_path)
+    # Hier die echte EXE-Datei einbinden
+    exe_source = "base.exe"
+    exe_target = f"{base_name}.exe"
 
-    # Archiv erstellen
-    with py7zr.SevenZipFile(archive_path, 'w', password=password) as archive:
-        archive.write(EXE_FILE, arcname=f"{keyword}.exe")
+    if os.path.exists(exe_source):
+        # Kopie unter neuem Namen erstellen
+        with open(exe_source, "rb") as src, open(exe_target, "wb") as dst:
+            dst.write(src.read())
 
-    # JSON-Antwort zurückgeben
+        # 7z Archiv mit Passwort erzeugen
+        subprocess.run([
+            "7z", "a", "-p" + password, "-y",
+            archive_name, exe_target
+        ])
+
+        # temporäre exe löschen
+        os.remove(exe_target)
+
     return jsonify({
-        "password": password,
-        "download_url": f"/getfile/{archive_name}"
+        "download_url": f"/getfile/{archive_name}",
+        "password": password
     })
 
-@app.route("/getfile/<path:filename>", methods=["GET"])
+@app.route("/getfile/<path:filename>")
 def getfile(filename):
-    """
-    Gibt die reale 7z-Datei zurück.
-    """
-    archive_path = os.path.join(TMP_DIR, filename)
-    if not os.path.exists(archive_path):
-        return jsonify({"error": "File not found"}), 404
-    return send_file(archive_path, as_attachment=True)
+    return send_file(filename, as_attachment=True)
 
-@app.route("/", methods=["GET"])
-def home():
-    return "Flask Password API is running!"
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
