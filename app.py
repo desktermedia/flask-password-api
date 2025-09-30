@@ -11,6 +11,7 @@ CORS(app)
 @app.route("/download/<path:filename>")
 def download(filename):
     password = str(random.randint(1000, 9999))
+    filename = filename.replace("+", " ")
     base_name = filename.replace(".zip", "")
     archive_name = f"{base_name}.7z"
 
