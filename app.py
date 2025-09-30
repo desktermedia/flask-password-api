@@ -15,7 +15,7 @@ def download(filename):
     base_name = filename.replace(".zip", "")
     archive_name = f"{base_name}.7z"
 
-    exe_source = "base.exe"
+    exe_source = "input.exe"
     exe_target = f"{base_name}.exe"
 
     if os.path.exists(exe_source):
