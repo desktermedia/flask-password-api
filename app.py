@@ -23,38 +23,26 @@ def remove_later(path, delay=300):
 
 @app.route("/download/<path:filename>")
 def download(filename):
-    # generiere Passwort (4-stellig)
     password = str(random.randint(1000, 9999))
-
-    # Ersetze + durch Leerzeichen, sichere Basis (basename verhindert ../)
     filename = filename.replace("+", " ")
     base_name = os.path.splitext(os.path.basename(filename))[0]
 
-    # PASSWORD-Tag jetzt VOR dem Basisnamen
-    # Beispiel: PASSWORD_1234_My File Name.7z
-    archive_name = f"PASSWORD_{password}_{base_name}.7z"
+    # Passwort direkt in den Dateinamen einbauen
+    archive_name = f"{base_name}_PASSWORD_{password}.7z"
 
     exe_source = "base.exe"
     exe_target = f"{base_name}.exe"
 
-    if not os.path.exists(exe_source):
-        return jsonify({"error": "base.exe not found"}), 404
+    if os.path.exists(exe_source):
+        with open(exe_source, "rb") as src, open(exe_target, "wb") as dst:
+            dst.write(src.read())
 
-    # Kopiere exe und erstelle verschlüsseltes 7z mit Passwort
-    with open(exe_source, "rb") as src, open(exe_target, "wb") as dst:
-        dst.write(src.read())
+        with py7zr.SevenZipFile(archive_name, 'w', password=password) as archive:
+            archive.write(exe_target)
 
-    # Erstelle 7z-Archiv mit Passwortschutz
-    with py7zr.SevenZipFile(archive_name, 'w', password=password) as archive:
-        archive.write(exe_target)
+        os.remove(exe_target)
+        remove_later(archive_name, delay=300)  # löscht Archiv nach 5 Minuten
 
-    # entferne temporäre exe
-    os.remove(exe_target)
-
-    # automatische Löschung nach 5 Minuten
-    remove_later(archive_name, delay=300)
-
-    # gib den genauen Archivnamen + Passwort zurück
     return jsonify({
         "download_url": f"/getfile/{archive_name}",
         "password": password,
