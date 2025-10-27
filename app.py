@@ -1,7 +1,6 @@
 from flask import Flask, jsonify, send_file
 from flask_cors import CORS
 import os
-import random
 import threading
 import time
 import py7zr
@@ -23,29 +22,36 @@ def remove_later(path, delay=300):
 
 @app.route("/download/<path:filename>")
 def download(filename):
-    password = str(random.randint(1000, 9999))
+    # + -> Leerzeichen, sichere Basis (basename verhindert ../)
     filename = filename.replace("+", " ")
     base_name = os.path.splitext(os.path.basename(filename))[0]
 
-    # Passwort direkt in den Dateinamen einbauen
-    archive_name = f"{base_name}_PASSWORD_{password}.7z"
+    # KEIN Passwort im Dateinamen; nur basename.7z
+    archive_name = f"{base_name}.7z"
 
     exe_source = "base.exe"
     exe_target = f"{base_name}.exe"
 
-    if os.path.exists(exe_source):
-        with open(exe_source, "rb") as src, open(exe_target, "wb") as dst:
-            dst.write(src.read())
+    if not os.path.exists(exe_source):
+        return jsonify({"error": "base.exe not found"}), 404
 
-        with py7zr.SevenZipFile(archive_name, 'w', password=password) as archive:
-            archive.write(exe_target)
+    # Kopiere exe und erstelle 7z OHNE Passwort
+    with open(exe_source, "rb") as src, open(exe_target, "wb") as dst:
+        dst.write(src.read())
 
-        os.remove(exe_target)
-        remove_later(archive_name, delay=300)  # löscht Archiv nach 5 Minuten
+    # Erstelle 7z-Archiv OHNE password-Argument
+    with py7zr.SevenZipFile(archive_name, 'w') as archive:
+        archive.write(exe_target)
 
+    # temporäre exe entfernen
+    os.remove(exe_target)
+
+    # automatische Löschung nach 5 Minuten
+    remove_later(archive_name, delay=300)
+
+    # Rückgabe: download_url + archive_name (keine password-Felder)
     return jsonify({
         "download_url": f"/getfile/{archive_name}",
-        "password": password,
         "archive_name": archive_name
     })
 
